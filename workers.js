@@ -79,9 +79,29 @@ async function handleRequest(request) {
 
     const data = await res.json();
 
-    // 如果用户请求的是具体文件，直接重定向到 raw 链接（避免 Worker 代理大文件）
+    // 如果用户请求的是具体文件，通过 Worker 代理下载（流量走 Cloudflare）
+    // 大文件优先走 raw 直链，小文件走代理缓存
     if (!Array.isArray(data)) {
-      return Response.redirect(data.download_url, 302);
+      const rawRes = await fetch(data.download_url, { headers });
+      if (!rawRes.ok) {
+        return new Response(
+          `<h1>错误 ${rawRes.status}</h1><p>文件下载失败。</p>`,
+          {
+            status: 502,
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          }
+        );
+      }
+      const blob = await rawRes.blob();
+      return new Response(blob, {
+        status: rawRes.status,
+        headers: {
+          "Content-Type": rawRes.headers.get("Content-Type") || "application/octet-stream",
+          "Content-Length": blob.size,
+          "Content-Disposition": `attachment; filename="${escapeHtml(data.name)}"`,
+          "Cache-Control": "public, max-age=3600",  // 文件缓存 1 小时
+        },
+      });
     }
 
     // 如果是目录，生成类似文件管理器的 HTML 页面
