@@ -1,6 +1,0 @@
-Add-AppxPackage Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx
-
-
-
-slmgr /skms kms.03k.org
-slmgr /ato
