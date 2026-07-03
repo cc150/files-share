@@ -4,7 +4,7 @@ REM 适用于x64位系统 32位系统将对应的包替换为x86即可
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
 
-set "URL=https://istudy.cc.cd/win10-lstc-2021/Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
+set "URL=https://files.istudy.cc.cd//win10-lstc-2021/Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
 set "FILE_NAME=Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
 set "FILE=%~dp0%FILE_NAME%"
 echo =====================================
