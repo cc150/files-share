@@ -1,94 +1,75 @@
 @echo off
+:: 设置控制台编码为 UTF-8 防止中文乱码
 chcp 65001 >nul
-REM 适用于x64位系统 32位系统将对应的包替换为x86即可
+title 安装 Microsoft.VCLibs 软件包
 
-setlocal EnableDelayedExpansion
-
-set "URL=http://files.istudy.cc.cd//win10-lstc-2021/Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
-set "FILE_NAME=Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
-set "FILE=%~dp0%FILE_NAME%"
-set "EXPECTED_HASH=009f7db134c6061fe8f260e075374a28abbbc44e6cf23de107f93ec8b8c59816"
-
-echo =====================================
-echo  下载并安装 VCLibs x64
-echo  来源: %URL%
-echo =====================================
-echo.
-
-rem --- 1. 先检查是否已安装（已安装则无需下载）---
-echo [*] 检查是否已安装...
-set installed=0
-for /f "delims=" %%i in ('powershell -NoLogo -NoProfile -NonInteractive "try { $p = Get-AppxPackage *VCLibs* | Where { $_.Architecture -eq 'x64' }; if ($p) { Write-Output 'yes' } } catch {}"') do (
-    if /i "%%i"=="yes" set installed=1
-)
-
-if !installed! equ 1 (
-    echo [OK] VCLibs x64 已安装，跳过下载与安装！
-    goto :END
-)
-
-rem --- 2. 执行下载 ---
-echo 正在下载依赖包...
-curl -sLf -o "%FILE%" "%URL%"
-
-rem --- 3. 基础下载校验 ---
+:: ==============================================================================
+:: 1. 管理员权限检查与自动提权
+:: ==============================================================================
+net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [失败] 下载网络出错，错误码：%errorlevel%
-    goto :FAIL
+    echo [!] 检测到未开启管理员权限，正在尝试提升权限...
+    powershell -Command "Start-Process '%~f0' -Verb RunAs"
+    exit /b
 )
 
-if not exist "%FILE%" (
-    echo [失败] 下载文件未生成！
-    goto :FAIL
+:: ==============================================================================
+:: 2. 文件路径设置与存在性校验
+:: ==============================================================================
+set "TARGET_DIR=D:\tmp\win10-libs"
+set "FILE_NAME=Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
+set "FILE_PATH=%TARGET_DIR%\%FILE_NAME%"
+
+echo ========================================================
+echo  步骤 1/2: 检查本地安装包
+echo ========================================================
+echo 目标目录: %TARGET_DIR%
+echo 目标文件: %FILE_NAME%
+echo.
+
+if not exist "%FILE_PATH%" (
+    echo [错误] 找不到已下载的文件！
+    echo 请确认文件已放置在路径: %FILE_PATH%
+    echo.
+    pause
+    exit /b 1
 )
 
-for %%A in ("%FILE%") do set "FILE_SIZE=%%~zA"
-if !FILE_SIZE! equ 0 (
-    echo [失败] 下载的文件为空文件 (0 字节)！
-    del /f /q "%FILE%" >nul 2>&1
-    goto :FAIL
+:: 检查文件体积是否正常 (以防文件损坏或未下载完整)
+for %%I in ("%FILE_PATH%") do set "FILE_SIZE=%%~zI"
+
+if %FILE_SIZE% lss 10240 (
+    echo [错误] 文件体积异常（只有 %FILE_SIZE% 字节），可能文件未下载完整或损坏！
+    echo.
+    pause
+    exit /b 1
 )
 
-echo [成功] 文件已成功下载，大小为 !FILE_SIZE! 字节。
+echo [OK] 文件存在且校验通过，文件大小: %FILE_SIZE% 字节。
+echo.
 
-rem --- 4. SHA256 完整性校验 ---
-echo [*] 正在校验 SHA256 哈希值...
-set "ACTUAL_HASH="
-for /f "delims=" %%h in ('powershell -NoLogo -NoProfile -NonInteractive "(Get-FileHash -Path '%FILE%' -Algorithm SHA256).Hash"') do (
-    set "ACTUAL_HASH=%%h"
-)
+:: ==============================================================================
+:: 3. 调用 PowerShell 进行安装并显示详细过程
+:: ==============================================================================
+echo ========================================================
+echo  步骤 2/2: 开始安装软件包...
+echo ========================================================
+echo.
 
-if /i "!ACTUAL_HASH!"=="%EXPECTED_HASH%" (
-    echo [成功] SHA256 校验匹配成功！
+:: -Verbose 参数会在控制台实时输出部署进度和操作步骤
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Add-AppxPackage -Path '%FILE_PATH%' -Verbose"
+
+if %errorlevel% equ 0 (
+    echo.
+    echo ========================================================
+    echo  [成功] Microsoft.VCLibs 软件包已顺利安装！
+    echo ========================================================
 ) else (
-    echo [失败] SHA256 校验不匹配，文件可能损坏或被篡改！
-    echo        预期: %EXPECTED_HASH%
-    echo        实际: !ACTUAL_HASH!
-    del /f /q "%FILE%" >nul 2>&1
-    goto :FAIL
+    echo.
+    echo ========================================================
+    echo  [失败] 安装过程中出现异常，请检查上方 PowerShell 的错误信息。
+    echo ========================================================
 )
+
 echo.
-
-rem --- 5. 开始安装 ---
-echo [*] 正在安装...
-powershell -NoLogo -NoProfile -ExecutionPolicy Bypass "Add-AppxPackage -Path '%FILE%' -Verbose"
-
-if !errorlevel! equ 0 (
-    echo [OK] 安装成功！
-) else (
-    echo [FAIL] 安装失败！
-)
-goto :END
-
-:FAIL
-echo.
-echo [错误] 因文件未完整下载或校验失败，已终止安装流程。
-
-:END
-echo.
-echo =====================================
-echo  完成！
-echo =====================================
-echo.
-
 pause
