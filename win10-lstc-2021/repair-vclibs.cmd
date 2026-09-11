@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 :: 强制将当前 CMD 窗口切换为 UTF-8 编码
 REM 适用于x64位系统 32位系统将对应的包替换为x86即可
 chcp 65001 >nul

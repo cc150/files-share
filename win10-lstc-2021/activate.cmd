@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 rem ---激活 win10 lstc 2021 ---
 rem ---需要管理员身份运行 ---
