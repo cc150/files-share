@@ -1,77 +1,89 @@
 @echo off
-:: 强制将当前 CMD 窗口切换为 UTF-8 编码
 REM 适用于x64位系统 32位系统将对应的包替换为x86即可
-chcp 65001 >nul
+
 setlocal EnableDelayedExpansion
 
-set "URL=https://files.istudy.cc.cd//win10-lstc-2021/Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
+set "URL=http://files.istudy.cc.cd//win10-lstc-2021/Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
 set "FILE_NAME=Microsoft.VCLibs.140.00_14.0.30704.0_x64__8wekyb3d8bbwe.Appx"
-set "MIN_VERSION=14.0.30704.0"
 set "FILE=%~dp0%FILE_NAME%"
+set "EXPECTED_HASH=009f7db134c6061fe8f260e075374a28abbbc44e6cf23de107f93ec8b8c59816"
 
 echo =====================================
-echo  安装 VCLibs x64 依赖包
+echo  下载并安装 VCLibs x64
+echo  来源: %URL%
 echo =====================================
 echo.
 
-rem --- 第一步：先检测是否已安装满足版本要求 ---
+rem --- 1. 先检查是否已安装（已安装则无需下载）---
 echo [*] 检查是否已安装...
-set "installed=0"
-for /f "delims=" %%i in ('powershell -NoLogo -NoProfile -NonInteractive -Command ^
-    "try { $p = Get-AppxPackage *VCLibs* | Where-Object { $_.Architecture -eq 'x64' -and [version]$_.Version -ge [version]'%MIN_VERSION%' }; if ($p) { Write-Output 'yes' } } catch {}"') do (
-    if /i "%%i"=="yes" set "installed=1"
+set installed=0
+for /f "delims=" %%i in ('powershell -NoLogo -NoProfile -NonInteractive "try { $p = Get-AppxPackage *VCLibs* | Where { $_.Architecture -eq 'x64' }; if ($p) { Write-Output 'yes' } } catch {}"') do (
+    if /i "%%i"=="yes" set installed=1
 )
 
 if !installed! equ 1 (
-    echo [OK] 已安装满足要求的 VCLibs x64（版本 ^>= %MIN_VERSION%），跳过下载与安装。
-    goto :end
+    echo [OK] VCLibs x64 已安装，跳过下载与安装！
+    goto :END
 )
 
-echo [*] 未检测到满足版本要求的 VCLibs，准备下载...
-echo.
-
-rem --- 第二步：下载文件（-f 遇到 HTTP 错误码会失败，避免把错误页当成功） ---
+rem --- 2. 执行下载 ---
 echo 正在下载依赖包...
-echo 来源: %URL%
-curl -fL --connect-timeout 10 --max-time 120 -o "%FILE%" "%URL%"
+curl -sLf -o "%FILE%" "%URL%"
 
-if not %errorlevel% equ 0 (
-    echo [失败] 下载出错，错误码：%errorlevel%
-    goto :end
+rem --- 3. 基础下载校验 ---
+if %errorlevel% neq 0 (
+    echo [失败] 下载网络出错，错误码：%errorlevel%
+    goto :FAIL
 )
 
-rem --- 检查文件是否存在且非空 ---
 if not exist "%FILE%" (
-    echo [失败] 未找到下载后的文件，安装终止。
-    goto :end
-)
-for %%A in ("%FILE%") do set "FILE_SIZE=%%~zA"
-if !FILE_SIZE! lss 1024 (
-    echo [失败] 下载的文件过小（%FILE_SIZE% 字节），可能不完整或下载源返回了错误页面，安装终止。
-    del /q "%FILE%" >nul 2>&1
-    goto :end
+    echo [失败] 下载文件未生成！
+    goto :FAIL
 )
 
-echo [成功] 文件已下载到脚本同级目录下（大小: !FILE_SIZE! 字节）
+for %%A in ("%FILE%") do set "FILE_SIZE=%%~zA"
+if !FILE_SIZE! equ 0 (
+    echo [失败] 下载的文件为空文件 (0 字节)！
+    del /f /q "%FILE%" >nul 2>&1
+    goto :FAIL
+)
+
+echo [成功] 文件已成功下载，大小为 !FILE_SIZE! 字节。
+
+rem --- 4. SHA256 完整性校验 ---
+echo [*] 正在校验 SHA256 哈希值...
+set "ACTUAL_HASH="
+for /f "delims=" %%h in ('powershell -NoLogo -NoProfile -NonInteractive "(Get-FileHash -Path '%FILE%' -Algorithm SHA256).Hash"') do (
+    set "ACTUAL_HASH=%%h"
+)
+
+if /i "!ACTUAL_HASH!"=="%EXPECTED_HASH%" (
+    echo [成功] SHA256 校验匹配成功！
+) else (
+    echo [失败] SHA256 校验不匹配，文件可能损坏或被篡改！
+    echo        预期: %EXPECTED_HASH%
+    echo        实际: !ACTUAL_HASH!
+    del /f /q "%FILE%" >nul 2>&1
+    goto :FAIL
+)
 echo.
 
-rem --- 第三步：安装 ---
+rem --- 5. 开始安装 ---
 echo [*] 正在安装...
-powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "Add-AppxPackage -Path '%FILE%' -Verbose"
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass "Add-AppxPackage -Path '%FILE%' -Verbose"
 
 if !errorlevel! equ 0 (
     echo [OK] 安装成功！
-
-    rem --- 可选：安装成功后清理下载的安装包 ---
-    rem 如需自动删除，取消下面两行的注释
-    rem del /q "%FILE%" >nul 2>&1
-    rem echo [*] 已清理安装包文件。
 ) else (
-    echo [FAIL] 安装失败！错误码：!errorlevel!
-    echo 可能原因：系统未启用"开发者模式"或"旁加载应用"权限，或该包与系统架构不匹配。
+    echo [FAIL] 安装失败！
 )
+goto :END
 
-:end
+:FAIL
+echo.
+echo [错误] 因文件未完整下载或校验失败，已终止安装流程。
+
+:END
 echo.
 echo =====================================
 echo  完成！
