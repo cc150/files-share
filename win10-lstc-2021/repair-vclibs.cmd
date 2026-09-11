@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 REM 适用于x64位系统 32位系统将对应的包替换为x86即可
 
 setlocal EnableDelayedExpansion
